@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}-keycloak-post-install"
+  namespace: {{ .Values.namespace.name | default .Release.Namespace | default "default" }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: post-install-job
+        image: "ubuntu:latest"
+        command:
+          - "/bin/bash"
+          - "-c"
+        args:
+          - |
+            echo "Updating alpine and installing packages"
+            apt update && apt upgrade -y && apt install -y curl jq
+            echo "Waiting for keycloak api"
+            i=0
+            while [[ "$(curl -s -o /dev/null -L -w ''%{http_code}'' http://{{ .Release.Name }}-keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth/realms/master/.well-known/openid-configuration)" != 200  ]];do
+                    echo "Not 200, Waiting for keycloak api." && sleep 2;
+                    ((i+=1))
+                    if [[ "$i" -gt 30 ]]; then
+                      echo "Failed to connect after 1 minute"
+                      exit 1
+                    fi
+            done
+            echo "Getting access token"
+            ACCESS_TOKEN=$(curl -XPOST -s -H "Content-Type: application/x-www-form-urlencoded" -d "username={{ .Values.username }}" -d "password={{ .Values.password }}" -d "grant_type=password" -d "client_id=admin-cli" 'http://{{ .Release.Name }}-keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth/realms/master/protocol/openid-connect/token' | jq -r '.access_token')
+            echo "Creating realm"
+            curl -XPOST 'http://{{ .Release.Name }}-keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth/admin/realms' -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" --data-raw '{
+              "realm": "{{ .Values.realm }}",
+              "displayName": "{{ .Values.realm }}",
+              "enabled": true,
+              "users": [
+                {
+                  "email": "{{ .Values.user.email }}",
+                  "enabled": true,
+                  "username": "{{ .Values.user.email }}",
+                  "realmRoles":[
+                    "uma_authorization",
+                    "offline_access"
+                  ],
+                  "credentials": [
+                    {
+                      "temporary": false,
+                      "type": "password",
+                      "value": "{{ .Values.user.password }}"
+                    }
+                  ]
+                }
+              ]
+             }'
+            curl -XPOST 'http://{{ .Release.Name }}-keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth/admin/realms/{{ .Values.realm }}/clients' -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" --data-raw '{"clientId": "{{ .Values.clientId }}", "directAccessGrantsEnabled":true, "redirectUris":["*"],"secret":"{{ .Values.uuid | default uuidv4 }}"}'
+

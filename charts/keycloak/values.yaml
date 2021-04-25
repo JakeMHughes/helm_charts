@@ -1,0 +1,36 @@
+namespace: {}
+#  name: keycloak
+#  create: true
+
+master:
+  username: sa
+  password: password
+realms:
+
+realm: kong
+
+user:
+  email: kong@gmail.com
+  password: password
+
+database:
+  type: mysql
+  storage: 20Gi
+  root:
+    password: password
+    #TODO
+    #passwordSecret: password-secret
+  user:
+    username: keycloak
+    password: keycloak
+
+clientId: kong
+
+mysql:
+  enabled: true
+  namespace: {}
+  rootPassword: password
+  user:
+    username: keycloak
+    password: keycloak
+  database: keycloak
