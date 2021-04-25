@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-mysql
+  namespace: {{ .Values.namespace.name | default .Release.Namespace | default "default" }}
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image: mysql:{{ .Values.version }}
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          {{- if .Values.rootPassword.random }}
+          #Root password is random
+          value: {{ randAlphaNum 16 }}
+          {{- else if .Values.rootPassword.value }}
+          #Root password is plain text
+          value: {{ .Values.rootPassword.value }}
+          {{- else if .Values.rootPassword.secret }}
+          #Root password is in secret
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.rootPassword.secret.name }}
+              key: {{ .Values.rootPassword.secret.key }}
+          {{- end }}
+          {{- if .Values.user }}
+          {{- if and .Values.user.username ( or .Values.user.password.value .Values.user.password.secret ) }}
+        - name: MYSQL_USER
+          value: {{ .Values.user.username }}
+        - name: MYSQL_PASSWORD
+          {{- if .Values.user.password.value }}
+          value: {{ .Values.user.password.value }}
+          {{- else if .Values.user.password.secret }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.user.password.secret.name }}
+              key: {{ .Values.user.password.secret.key }}
+          {{- end }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.database }}
+        - name: MYSQL_DATABASE
+          value: {{ .Values.database }}
+          {{- end }}
+          {{- if .Values.rootPassword.temporary }}
+        - name: MYSQL_ONETIME_PASSWORD
+          value: "yes"
+          {{- end }}
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        {{ if .Values.volume }}
+        {{ if .Values.volume.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-mysql-pv-claim
+        {{ end }}
+        {{ end }}
