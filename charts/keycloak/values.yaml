@@ -2,35 +2,58 @@ namespace: {}
 #  name: keycloak
 #  create: true
 
+port: 8080
+
 master:
   username: sa
   password: password
-realms:
 
-realm: kong
+#Specifiying realm data will create the realm
+#This data gets converted to JSON for keycloak's admin api request
+#realms:
+#  - name: kong
+#    displayName: kong
+#    enabled: true
+#    users:
+#      - email: kong@gmail.com
+#        firstName: King
+#        lastName: Kong
+#        username: kong@gmail.com
+#        enabled: true
+#        realmRoles:
+#          - "uma_authorization"
+#          - "offline_access"
+#        credentials:
+#          - temporary: false
+#            type: password
+#            value: password
+
+#Specifiying client data will create the client for the specified realm
+#This data gets converted to JSON for keycloak's admin api request
+#clients:
+#  - realm: kong
+#    clientId: kong
+#    directAccessGrantsEnabled: true
+#    redirectUris:
+#      - "*"
+#    secret: 4350a2e9-25f9-4e97-b401-cbeee7585986
 
 user:
   email: kong@gmail.com
   password: password
 
-database:
-  type: mysql
-  storage: 20Gi
-  root:
-    password: password
-    #TODO
-    #passwordSecret: password-secret
-  user:
-    username: keycloak
-    password: keycloak
+database: mysql
+
 
 clientId: kong
 
 mysql:
   enabled: true
   namespace: {}
-  rootPassword: password
   user:
     username: keycloak
-    password: keycloak
+    password:
+      value: keycloak
   database: keycloak
+  rootPassword:
+    value: password
